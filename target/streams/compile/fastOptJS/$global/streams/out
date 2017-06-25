@@ -1,0 +1,16 @@
+[info] Fast optimizing E:\Users\Sam\Downloads\testScalajs\target\scala-2.12\scala-js-tutorial-fastopt.js
+[debug] Linker: Compute reachability: 37106 us
+[debug] Linker: Assemble LinkedClasses: 12966 us
+[debug] Basic Linking: 51799 us
+[debug] Inc. optimizer: Batch mode: false
+[debug] Inc. optimizer: Incremental part: 3091 us
+[debug] Inc. optimizer: Optimizing 1 methods.
+[debug] Inc. optimizer: Optimizer part: 1175 us
+[debug] Inc. optimizer: 5520 us
+[debug] Refiner: Compute reachability: 49204 us
+[debug] Refiner: Assemble LinkedClasses: 2377 us
+[debug] Refiner: 51726 us
+[debug] Emitter: Class tree cache stats: reused: 476 -- invalidated: 5
+[debug] Emitter: Method tree cache stats: resued: 900 -- invalidated: 1
+[debug] Emitter (write output): 59031 us
+[debug] Global IR cache stats: reused: 6 -- invalidated: 7 -- trees read: 5
