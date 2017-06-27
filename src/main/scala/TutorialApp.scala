@@ -1,9 +1,7 @@
 package tutorial.webapp
 
 import org.scalajs.dom
-import dom.document
-import org.scalajs.dom.html
-import org.scalajs.dom.raw.HTMLCanvasElement
+import org.scalajs.dom.{document, html}
 
 import scala.scalajs.js.JSApp
 import scala.util.Random
@@ -35,11 +33,14 @@ case class Complex(x: Double, y: Double) {
 
   def -(o: Complex) = Complex(x - o.x, y - o.y)
 
+  def unary_- = Complex(-x, -y)
+
   def *(o: Complex) = Complex(x * o.x - y * o.y, x * o.y + y * o.x)
 
   def *(d: Double) = Complex(x * d, y * d)
 
-  def modulus = Math.sqrt(x * x + y * y)
+
+  def modulus = if (x != 0.0 || y != 0.0) Math.sqrt(x * x + y * y) else 0.0
 
   def conjugate = Complex(x, -y)
 
@@ -49,13 +50,23 @@ case class Complex(x: Double, y: Double) {
 
   def /(d: Double) = Complex(x / d, y / d)
 
+  def argument = Math.atan2(y, x)
 }
 
 object Complex {
   def sqrt(c: Complex) = {
-    val r = c.modulus
-    val modZR = (c + r).modulus
-    ((c + r) / modZR) * Math.sqrt(r)
+    val r = Math.sqrt(c.modulus)
+    val theta = c.argument / 2.0
+    Complex(Math.cos(theta), Math.sin(theta)) * r
+  }
+
+
+  def sqrts(c: Complex) = {
+    //println(c)
+    val r = Math.sqrt(c.modulus)
+    val theta = c.argument / 2.0
+    val primaryRoot = Complex(Math.cos(theta), Math.sin(theta)) * r
+    List(primaryRoot)
   }
 }
 
@@ -67,55 +78,98 @@ case class Circle(radius: Double, pos: Vector) {
 
   def draw(color:String = "black")(implicit ctx: dom.CanvasRenderingContext2D) = {
     ctx.beginPath()
-    ctx.strokeStyle = color
+    ctx.fillStyle = color
     ctx.arc(pos.x, pos.y, radius, 2 * Math.PI, 0)
-    ctx.stroke()
+
+    ctx.fill()
+
+  }
+}
+
+object Util {
+  def approxEqual(d1: Double, d2: Double) = Math.abs(Math.abs(d1) - Math.abs(d2)) < 0.001
+
+}
+
+object Circle {
+  def areEqual(c1: Circle, c2: Circle) = {
+    Util.approxEqual(c1.pos.x, c2.pos.x) && Util.approxEqual(c1.pos.y, c2.pos.y) && Util.approxEqual(c1.radius, c2.radius)
+  }
+
+  def areTangent(c1: Circle, c2: Circle) = {
+    val diff = c1.pos - c2.pos
+    Util.approxEqual(diff.x * diff.x + diff.y * diff.y, Math.pow(c1.radius + c2.radius, 2)) ||
+      Util.approxEqual(diff.x * diff.x + diff.y * diff.y, Math.pow(c1.radius - c2.radius, 2))
   }
 }
 
 object TutorialApp extends JSApp {
 
 
-  def curvatureNextCircle(c1: Double, c2: Double, c3: Double): Double = c1 + c2 + c3 + 2 * Math.sqrt(c1 * c2 + c1 * c3 + c2 * c3)
+  def curvatureNextCircle(c1: Double, c2: Double, c3: Double): List[Double] = {
+    val a = c1 + c2 + c3
+    val root = 2.0 * Math.sqrt(c1 * c2 + c1 * c3 + c2 * c3)
+    List(a + root, a - root)
+  }
 
   def positionsNextCircle(z1: Complex, z2: Complex, z3: Complex, k1: Double, k2: Double, k3: Double): List[Complex] = {
     val bz1 = z1 * k1
     val bz2 = z2 * k2
     val bz3 = z3 * k3
-    println(s"z3 = ${z3}, k3 = ${k3}")
-    println(bz1,bz2,bz3)
 
     val addition = bz1 + bz2 + bz3
-    val root = Complex.sqrt(bz1 * bz2 + bz1 * bz3 + bz2 * bz3) * 2
-    List(addition - root, addition + root)
+    val root = Complex.sqrt(bz1 * bz2 + bz1 * bz3 + bz2 * bz3) * 2.0
+    List(addition + root, addition - root)
   }
 
   def kissingCircles(c1: Circle, c2: Circle, c3: Circle): List[Circle] = {
     implicit def toComplex(v: Vector): Complex = Complex(v.x, v.y)
-    val curvature = curvatureNextCircle(c1.bend(c2.pos), c2.bend(c1.pos), c3.bend(c2.pos))
-    positionsNextCircle(c1.pos, c2.pos, c3.pos, c1.bend(c2.pos), c2.bend(c1.pos), c3.bend(c2.pos)).map(c => Vector(c.x / curvature, c.y / curvature)).map(Circle(1 / curvature, _))
+    implicit def toVector(c: Complex): Vector = Vector(c.x, c.y)
+
+    val curvatures: List[Double] = curvatureNextCircle(c1.bend(c2.pos), c2.bend(c1.pos), c3.bend(c2.pos))
+    val positions: List[Complex] = positionsNextCircle(c1.pos, c2.pos, c3.pos, c1.bend(c2.pos), c2.bend(c1.pos), c3.bend(c2.pos))
+    val parentCircles = List(c1, c2, c3)
+    for {
+      curve <- curvatures
+      pos <- positions
+      c: Circle = Circle(1.0 / curve, pos / curve)
+      if curve > 0.0 && parentCircles.forall(Circle.areTangent(_, c)) && c.radius < parentCircles.map(_.radius).min
+    } yield Circle(1.0 / curve, pos / curve)
   }
 
+  val colors = List.fill(15)(s"rgb(${Random.nextInt(250)},${Random.nextInt(250)},${Random.nextInt(250)})")
   def main(): Unit = {
-    val size = 500
-    val offset = 250.0
+    def startingCircles(outer: Circle) = {
+      (Circle(outer.radius / 2.0, Vector(outer.pos.x - outer.radius / 2.0, outer.pos.y)), Circle(outer.radius / 2.0, Vector(outer.pos.x + outer.radius / 2.0, outer.pos.y)))
+    }
+    val size = 1000.0
+    val offset = 500.0
+    val n = 9
     val cvs = document.getElementById("canvas") match {
       case e: html.Canvas => Some(e)
       case _ => None
     }
     implicit val ctx = cvs.map(e => e.getContext("2d").asInstanceOf[dom.CanvasRenderingContext2D]).getOrElse(throw new Error())
     val c1 = Circle(size / 2.0, Vector(size / 2, size / 2) + offset)
-    val c2 = Circle(size / 4.0, Vector(size / 4, size / 2) + offset)
-    val c3 = Circle(size / 4.0, Vector(3 * size / 4, size / 2) + offset)
+    val (c2, c3) = startingCircles(c1)
 
-    c1.draw()
-    c2.draw()
-    c3.draw()
-    val c4 = kissingCircles(c1, c2, c3)(0)
-    c4.draw()
-    //kissingCircles(c2,c3,c4).foreach(c => {println(c);c.draw("red")})
-    //kissingCircles(c1, c2, c4).map(_.draw("red"))
-    //draw(c1,c2,c3, 2)
+    ctx.lineWidth = 1
+    c1.draw(colors(n))
+    c2.draw(colors(n))
+    c3.draw(colors(n))
+    draw(c1, c2, c3, n)
+
+    val (c22, c23) = startingCircles(c2)
+    c22.draw(colors(n - 1))
+    c23.draw(colors(n - 1))
+
+    draw(c2, c22, c23, n)
+    val (c32, c33) = startingCircles(c3)
+    c32.draw(colors(n - 1))
+    c33.draw(colors(n - 1))
+
+    draw(c3, c32, c33, n)
+    //draw(c1,c2,c4, 3)
     //draw(c1, c2, c3, c4, 0)
 
     //draw(c1, c2, c3, 2)
@@ -123,12 +177,12 @@ object TutorialApp extends JSApp {
   }
 
   def draw(c1: Circle, c2: Circle, c3: Circle, n: Int)(implicit ctx: dom.CanvasRenderingContext2D): Unit = {
-    if (n == 0) Unit
+    if (n <= 0) Unit
     else {
-      val k = kissingCircles(c1,c2,c3).head
-      k.draw("red")
-      List((c1,c2,k),(c1,c3,k),(c2,c3,k)).foreach(o => draw(o._1,o._2,o._3,n-1))
-
+      val ks = kissingCircles(c1, c2, c3)
+      ks.foreach(_.draw(colors(n)))
+      //ks.foreach(k => println(s"${(c1,c2,c3)} = ${k}"))
+      ks.flatMap(k => List((c1, c2, k), (c1, c3, k), (c2, c3, k))).foreach(o => draw(o._1, o._2, o._3, n - 1))
     }
   }
 }
