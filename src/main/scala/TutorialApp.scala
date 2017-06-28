@@ -11,12 +11,12 @@ case class Vector(x: Double, y: Double) {
 
   def *(l: Double) = Vector(l * x, l * y)
 
-  def magnitude = Math.sqrt(x * x + y * y)
-
   def unary_~ = {
     val m = magnitude
     Vector(x / m, y / m)
   }
+
+  def magnitude = Math.sqrt(x * x + y * y)
 
   def -(v: Vector) = Vector(x - v.x, y - v.y)
 
@@ -38,7 +38,6 @@ case class Complex(x: Double, y: Double) {
   def *(o: Complex) = Complex(x * o.x - y * o.y, x * o.y + y * o.x)
 
   def *(d: Double) = Complex(x * d, y * d)
-
 
   def modulus = if (x != 0.0 || y != 0.0) Math.sqrt(x * x + y * y) else 0.0
 
@@ -76,9 +75,20 @@ case class Circle(radius: Double, pos: Vector) {
   def bend(p: Vector) = if ((p - pos).magnitude < radius) -curvature else curvature
 
 
-  def draw(color:String = "black")(implicit ctx: dom.CanvasRenderingContext2D) = {
+  def draw(color: String = "black")(implicit ctx: dom.CanvasRenderingContext2D) = {
+    val (x, y) = (pos.x, pos.y)
+    val innerRadius = 0
+    val outerRadius = radius
+
+
+    val gradient = ctx.createRadialGradient(x, y, innerRadius, x, y, outerRadius)
+    gradient.addColorStop(0, "black")
+    gradient.addColorStop(0.90, "black")
+    gradient.addColorStop(0.95, "red")
+    //gradient.addColorStop(1, color)
+
     ctx.beginPath()
-    ctx.fillStyle = color
+    ctx.fillStyle = gradient
     ctx.arc(pos.x, pos.y, radius, 2 * Math.PI, 0)
 
     ctx.fill()
@@ -105,6 +115,8 @@ object Circle {
 
 object TutorialApp extends JSApp {
 
+
+  val colors = List.fill(15)(s"rgb(${Random.nextInt(250)},${Random.nextInt(250)},${Random.nextInt(250)})")
 
   def curvatureNextCircle(c1: Double, c2: Double, c3: Double): List[Double] = {
     val a = c1 + c2 + c3
@@ -137,13 +149,20 @@ object TutorialApp extends JSApp {
     } yield Circle(1.0 / curve, pos / curve)
   }
 
-  val colors = List.fill(15)(s"rgb(${Random.nextInt(250)},${Random.nextInt(250)},${Random.nextInt(250)})")
   def main(): Unit = {
+    val eps = 0.1
+    val size = 1000.0
+    val offset = 500.0
     def startingCircles(outer: Circle) = {
       (Circle(outer.radius / 2.0, Vector(outer.pos.x - outer.radius / 2.0, outer.pos.y)), Circle(outer.radius / 2.0, Vector(outer.pos.x + outer.radius / 2.0, outer.pos.y)))
     }
-    val size = 1000.0
-    val offset = 500.0
+    def startingCirclesNest(outer: Circle) = {
+      val rad1 = outer.radius * (1 - eps)
+      val y = offset + rad1
+      (Circle(rad1, Vector(outer.pos.x, y)),
+        Circle(outer.radius * (1 - eps * 2), Vector(outer.pos.x, outer.pos.y - outer.radius + outer.radius * eps * 2)))
+    }
+
     val n = 9
     val cvs = document.getElementById("canvas") match {
       case e: html.Canvas => Some(e)
@@ -152,6 +171,7 @@ object TutorialApp extends JSApp {
     implicit val ctx = cvs.map(e => e.getContext("2d").asInstanceOf[dom.CanvasRenderingContext2D]).getOrElse(throw new Error())
     val c1 = Circle(size / 2.0, Vector(size / 2, size / 2) + offset)
     val (c2, c3) = startingCircles(c1)
+    //val (c2, c3) = startingCircles(c1)
 
     ctx.lineWidth = 1
     c1.draw(colors(n))
@@ -159,12 +179,12 @@ object TutorialApp extends JSApp {
     c3.draw(colors(n))
     draw(c1, c2, c3, n)
 
-    val (c22, c23) = startingCircles(c2)
+    val (c22, c23) = startingCirclesNest(c2)
     c22.draw(colors(n - 1))
     c23.draw(colors(n - 1))
 
     draw(c2, c22, c23, n)
-    val (c32, c33) = startingCircles(c3)
+    val (c32, c33) = startingCirclesNest(c3)
     c32.draw(colors(n - 1))
     c33.draw(colors(n - 1))
 
